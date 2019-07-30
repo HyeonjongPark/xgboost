@@ -94,3 +94,10 @@ plugin/updater_gpu/test/cpp/data
 /include/xgboost/build_config.h
 demo/
 cmake-build-debug
+
+# files from R-package source install
+**/config.status
+R-package/src/Makevars
+
+# Python install
+python-package/xgboost/tracker.py

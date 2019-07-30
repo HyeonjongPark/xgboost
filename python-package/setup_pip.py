@@ -69,4 +69,13 @@ setup(name=open(os.path.join(CURRENT_DIR, 'xgboost/NAME')).read().strip(),
       # root directory for some machines, and cause confusions on building
       # data_files=[('xgboost', LIB_PATH)],
       distclass=BinaryDistribution,
-      url='https://github.com/h2oai/xgboost')
+      url='https://github.com/h2oai/xgboost',
+      classifiers=['License :: OSI Approved :: Apache Software License',
+                   'Development Status :: 5 - Production/Stable',
+                   'Operating System :: OS Independent',
+                   'Programming Language :: Python',
+                   'Programming Language :: Python :: 3',
+                   'Programming Language :: Python :: 3.5',
+                   'Programming Language :: Python :: 3.6',
+                   'Programming Language :: Python :: 3.7'],
+      python_requires='>=3.4')

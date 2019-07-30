@@ -6,12 +6,13 @@
  */
 #include <rabit/rabit.h>
 #include <xgboost/tree_updater.h>
+#include <xgboost/logging.h>
 #include <memory>
 #include <vector>
 #include <cmath>
 #include <algorithm>
 
-#include "./param.h"
+#include "param.h"
 #include "../common/random.h"
 #include "../common/bitmap.h"
 #include "split_evaluator.h"
@@ -77,7 +78,7 @@ class ColMaker: public TreeUpdater {
     /*! \brief current best solution */
     SplitEntry best;
     // constructor
-    NodeEntry() : root_gain(0.0f), weight(0.0f) {}
+    NodeEntry() : root_gain{0.0f}, weight{0.0f} {}
   };
   // actual builder that runs the algorithm
   class Builder {
@@ -245,7 +246,6 @@ class ColMaker: public TreeUpdater {
                                  DMatrix *p_fmat,
                                   const std::vector<GradientPair> &gpair) {
       // TODO(tqchen): double check stats order.
-      const MetaInfo& info = p_fmat->Info();
       const bool ind = col.size() != 0 && col[0].fvalue == col[col.size() - 1].fvalue;
       bool need_forward = param_.NeedForwardSearch(p_fmat->GetColDensity(fid), ind);
       bool need_backward = param_.NeedBackwardSearch(p_fmat->GetColDensity(fid), ind);
@@ -595,15 +595,16 @@ class ColMaker: public TreeUpdater {
       const MetaInfo& info = p_fmat->Info();
       // start enumeration
       const auto num_features = static_cast<bst_omp_uint>(feat_set.size());
-      #if defined(_OPENMP)
-      const int batch_size = std::max(static_cast<int>(num_features / this->nthread_ / 32), 1);
-      #endif  // defined(_OPENMP)
+#if defined(_OPENMP)
+      const int batch_size =  // NOLINT
+          std::max(static_cast<int>(num_features / this->nthread_ / 32), 1);
+#endif  // defined(_OPENMP)
       int poption = param_.parallel_option;
       if (poption == 2) {
         poption = static_cast<int>(num_features) * 2 < this->nthread_ ? 1 : 0;
       }
       if (poption == 0) {
-        #pragma omp parallel for schedule(dynamic, batch_size)
+#pragma omp parallel for schedule(dynamic, batch_size)
         for (bst_omp_uint i = 0; i < num_features; ++i) {
           int fid = feat_set[i];
           const int tid = omp_get_thread_num();
@@ -631,10 +632,9 @@ class ColMaker: public TreeUpdater {
                           const std::vector<GradientPair> &gpair,
                           DMatrix *p_fmat,
                           RegTree *p_tree) {
-      auto p_feature_set = column_sampler_.GetFeatureSet(depth);
-      const auto& feat_set = *p_feature_set;
+      auto feat_set = column_sampler_.GetFeatureSet(depth);
       for (const auto &batch : p_fmat->GetSortedColumnBatches()) {
-        this->UpdateSolution(batch, feat_set, gpair, p_fmat);
+        this->UpdateSolution(batch, feat_set->HostVector(), gpair, p_fmat);
       }
       // after this each thread's stemp will get the best candidates, aggregate results
       this->SyncBestSolution(qexpand);
@@ -770,7 +770,7 @@ class DistColMaker : public ColMaker {
  public:
   void Init(const std::vector<std::pair<std::string, std::string> >& args) override {
     param_.InitAllowUnknown(args);
-    pruner_.reset(TreeUpdater::Create("prune"));
+    pruner_.reset(TreeUpdater::Create("prune", tparam_));
     pruner_->Init(args);
     spliteval_.reset(SplitEvaluator::Create(param_.split_evaluator));
     spliteval_->Init(args);

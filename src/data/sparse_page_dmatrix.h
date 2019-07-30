@@ -24,6 +24,7 @@ class SparsePageDMatrix : public DMatrix {
   explicit SparsePageDMatrix(std::unique_ptr<DataSource>&& source,
                              std::string cache_info)
       : row_source_(std::move(source)), cache_info_(std::move(cache_info)) {}
+  virtual ~SparsePageDMatrix() = default;
 
   MetaInfo& Info() override;
 
@@ -40,9 +41,6 @@ class SparsePageDMatrix : public DMatrix {
   bool SingleColBlock() const override;
 
  private:
-  /*! \brief page size 256 MB */
-  static const size_t kPageSize = 256UL << 20UL;
-
   // source data pointers.
   std::unique_ptr<DataSource> row_source_;
   std::unique_ptr<SparsePageSource> column_source_;

@@ -20,9 +20,10 @@ import java.io.File
 
 import ml.dmlc.xgboost4j.{LabeledPoint => XGBLabeledPoint}
 
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.{SparkConf, SparkContext, TaskFailedListener}
 import org.apache.spark.sql._
 import org.scalatest.{BeforeAndAfterEach, FunSuite}
+import scala.util.Random
 
 trait PerTest extends BeforeAndAfterEach { self: FunSuite =>
 
@@ -49,6 +50,7 @@ trait PerTest extends BeforeAndAfterEach { self: FunSuite =>
         cleanExternalCache(currentSession.sparkContext.appName)
         currentSession = null
       }
+      TaskFailedListener.killerStarted = false
     }
   }
 
@@ -78,6 +80,18 @@ trait PerTest extends BeforeAndAfterEach { self: FunSuite =>
 
     ss.createDataFrame(sc.parallelize(it.toList, numPartitions))
       .toDF("id", "label", "features")
+  }
+
+  protected def buildDataFrameWithRandSort(
+      labeledPoints: Seq[XGBLabeledPoint],
+      numPartitions: Int = numWorkers): DataFrame = {
+    val df = buildDataFrame(labeledPoints, numPartitions)
+    val rndSortedRDD = df.rdd.mapPartitions { iter =>
+      iter.map(_ -> Random.nextDouble()).toList
+        .sortBy(_._2)
+        .map(_._1).iterator
+    }
+    ss.createDataFrame(rndSortedRDD, df.schema)
   }
 
   protected def buildDataFrameWithGroup(

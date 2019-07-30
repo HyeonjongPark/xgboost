@@ -62,7 +62,7 @@ class GBLinear : public GradientBooster {
       model_.param.InitAllowUnknown(cfg);
     }
     param_.InitAllowUnknown(cfg);
-    updater_.reset(LinearUpdater::Create(param_.updater));
+    updater_.reset(LinearUpdater::Create(param_.updater, learner_param_));
     updater_->Init(cfg);
     monitor_.Init("GBLinear");
   }
@@ -181,6 +181,14 @@ class GBLinear : public GradientBooster {
     return model_.DumpModel(fmap, with_stats, format);
   }
 
+  bool UseGPU() const override {
+    if (param_.updater == "gpu_coord_descent") {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
  protected:
   void PredictBatchInternal(DMatrix *p_fmat,
                std::vector<bst_float> *out_preds) {
@@ -258,6 +266,7 @@ class GBLinear : public GradientBooster {
     }
     preds[gid] = psum;
   }
+
   // biase margin score
   bst_float base_margin_;
   // model field

@@ -4,8 +4,11 @@
 #include <xgboost/learner.h>
 #include <xgboost/c_api.h>
 #include <xgboost/logging.h>
+
 #include <dmlc/thread_local.h>
 #include <rabit/rabit.h>
+#include <rabit/c_api.h>
+
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
@@ -87,7 +90,10 @@ class Booster {
     initialized_ = true;
   }
 
- public:
+  bool IsInitialized() const { return initialized_; }
+  void Intialize() { initialized_ = true; }
+
+ private:
   bool configured_;
   bool initialized_;
   std::unique_ptr<Learner> learner_;
@@ -302,20 +308,6 @@ XGB_DLL int XGDMatrixCreateFromCSREx(const size_t* indptr,
   API_END();
 }
 
-XGB_DLL int XGDMatrixCreateFromCSR(const xgboost::bst_ulong* indptr,
-                                   const unsigned *indices,
-                                   const bst_float* data,
-                                   xgboost::bst_ulong nindptr,
-                                   xgboost::bst_ulong nelem,
-                                   DMatrixHandle* out) {
-  std::vector<size_t> indptr_(nindptr);
-  for (xgboost::bst_ulong i = 0; i < nindptr; ++i) {
-    indptr_[i] = static_cast<size_t>(indptr[i]);
-  }
-  return XGDMatrixCreateFromCSREx(&indptr_[0], indices, data,
-    static_cast<size_t>(nindptr), static_cast<size_t>(nelem), 0, out);
-}
-
 XGB_DLL int XGDMatrixCreateFromCSCEx(const size_t* col_ptr,
                                      const unsigned* indices,
                                      const bst_float* data,
@@ -370,20 +362,6 @@ XGB_DLL int XGDMatrixCreateFromCSCEx(const size_t* col_ptr,
   mat.info.num_nonzero_ = nelem;
   *out  = new std::shared_ptr<DMatrix>(DMatrix::Create(std::move(source)));
   API_END();
-}
-
-XGB_DLL int XGDMatrixCreateFromCSC(const xgboost::bst_ulong* col_ptr,
-                                   const unsigned* indices,
-                                   const bst_float* data,
-                                   xgboost::bst_ulong nindptr,
-                                   xgboost::bst_ulong nelem,
-                                   DMatrixHandle* out) {
-  std::vector<size_t> col_ptr_(nindptr);
-  for (xgboost::bst_ulong i = 0; i < nindptr; ++i) {
-    col_ptr_[i] = static_cast<size_t>(col_ptr[i]);
-  }
-  return XGDMatrixCreateFromCSCEx(&col_ptr_[0], indices, data,
-    static_cast<size_t>(nindptr), static_cast<size_t>(nelem), 0, out);
 }
 
 XGB_DLL int XGDMatrixCreateFromMat(const bst_float* data,
@@ -650,7 +628,7 @@ XGB_DLL int XGDMatrixCreateFromDT(void** data, const char** feature_stypes,
 #pragma omp parallel num_threads(nthread)
   {
     // Count elements per row, column by column
-    for (auto j = 0; j < ncol; ++j) {
+    for (auto j = 0u; j < ncol; ++j) {
       DTType dtype = DTGetType(feature_stypes[j]);
 #pragma omp for schedule(static)
       for (omp_ulong i = 0; i < nrow; ++i) {
@@ -697,6 +675,14 @@ XGB_DLL int XGDMatrixSliceDMatrix(DMatrixHandle handle,
                                   const int* idxset,
                                   xgboost::bst_ulong len,
                                   DMatrixHandle* out) {
+  return XGDMatrixSliceDMatrixEx(handle, idxset, len, out, 0);
+}
+
+XGB_DLL int XGDMatrixSliceDMatrixEx(DMatrixHandle handle,
+                                    const int* idxset,
+                                    xgboost::bst_ulong len,
+                                    DMatrixHandle* out,
+                                    int allow_groups) {
   std::unique_ptr<data::SimpleCSRSource> source(new data::SimpleCSRSource());
 
   API_BEGIN();
@@ -705,8 +691,10 @@ XGB_DLL int XGDMatrixSliceDMatrix(DMatrixHandle handle,
   src.CopyFrom(static_cast<std::shared_ptr<DMatrix>*>(handle)->get());
   data::SimpleCSRSource& ret = *source;
 
-  CHECK_EQ(src.info.group_ptr_.size(), 0U)
+  if (!allow_groups) {
+    CHECK_EQ(src.info.group_ptr_.size(), 0U)
       << "slice does not support group structure";
+  }
 
   ret.Clear();
   ret.info.num_row_ = len;
@@ -837,11 +825,14 @@ XGB_DLL int XGDMatrixGetUIntInfo(const DMatrixHandle handle,
   const std::vector<unsigned>* vec = nullptr;
   if (!std::strcmp(field, "root_index")) {
     vec = &info.root_index_;
-    *out_len = static_cast<xgboost::bst_ulong>(vec->size());
-    *out_dptr = dmlc::BeginPtr(*vec);
+  } else if (!std::strcmp(field, "group_ptr")) {
+    vec = &info.group_ptr_;
   } else {
-    LOG(FATAL) << "Unknown uint field name " << field;
+    LOG(FATAL) << "Unknown comp uint field name " << field
+      << " with comparison " << std::strcmp(field, "group_ptr");
   }
+  *out_len = static_cast<xgboost::bst_ulong>(vec->size());
+  *out_dptr = dmlc::BeginPtr(*vec);
   API_END();
 }
 
@@ -1043,19 +1034,21 @@ inline void XGBoostDumpModelImpl(
   *out_models = dmlc::BeginPtr(charp_vecs);
   *len = static_cast<xgboost::bst_ulong>(charp_vecs.size());
 }
+
 XGB_DLL int XGBoosterDumpModel(BoosterHandle handle,
-                       const char* fmap,
-                       int with_stats,
-                       xgboost::bst_ulong* len,
-                       const char*** out_models) {
+                               const char* fmap,
+                               int with_stats,
+                               xgboost::bst_ulong* len,
+                               const char*** out_models) {
   return XGBoosterDumpModelEx(handle, fmap, with_stats, "text", len, out_models);
 }
+
 XGB_DLL int XGBoosterDumpModelEx(BoosterHandle handle,
-                       const char* fmap,
-                       int with_stats,
-                       const char *format,
-                       xgboost::bst_ulong* len,
-                       const char*** out_models) {
+                                 const char* fmap,
+                                 int with_stats,
+                                 const char *format,
+                                 xgboost::bst_ulong* len,
+                                 const char*** out_models) {
   API_BEGIN();
   CHECK_HANDLE();
   FeatureMap featmap;
@@ -1070,23 +1063,24 @@ XGB_DLL int XGBoosterDumpModelEx(BoosterHandle handle,
 }
 
 XGB_DLL int XGBoosterDumpModelWithFeatures(BoosterHandle handle,
-                                   int fnum,
-                                   const char** fname,
-                                   const char** ftype,
-                                   int with_stats,
-                                   xgboost::bst_ulong* len,
-                                   const char*** out_models) {
+                                           int fnum,
+                                           const char** fname,
+                                           const char** ftype,
+                                           int with_stats,
+                                           xgboost::bst_ulong* len,
+                                           const char*** out_models) {
   return XGBoosterDumpModelExWithFeatures(handle, fnum, fname, ftype, with_stats,
-                                   "text", len, out_models);
+                                          "text", len, out_models);
 }
+
 XGB_DLL int XGBoosterDumpModelExWithFeatures(BoosterHandle handle,
-                                   int fnum,
-                                   const char** fname,
-                                   const char** ftype,
-                                   int with_stats,
-                                   const char *format,
-                                   xgboost::bst_ulong* len,
-                                   const char*** out_models) {
+                                             int fnum,
+                                             const char** fname,
+                                             const char** ftype,
+                                             int with_stats,
+                                             const char *format,
+                                             xgboost::bst_ulong* len,
+                                             const char*** out_models) {
   API_BEGIN();
   CHECK_HANDLE();
   FeatureMap featmap;
@@ -1154,7 +1148,7 @@ XGB_DLL int XGBoosterLoadRabitCheckpoint(BoosterHandle handle,
   auto* bst = static_cast<Booster*>(handle);
   *version = rabit::LoadCheckPoint(bst->learner());
   if (*version != 0) {
-    bst->initialized_ = true;
+    bst->Intialize();
   }
   API_END();
 }

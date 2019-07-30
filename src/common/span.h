@@ -70,16 +70,16 @@ namespace common {
 // Usual logging facility is not available inside device code.
 // TODO(trivialfis): Make dmlc check more generic.
 // assert is not supported in mac as of CUDA 10.0
-#define KERNEL_CHECK(cond)                                      \
-  do {                                                          \
-    if (!(cond)) {                                              \
-      printf("\nKernel error:\n"                                \
-             "In: %s, \tline: %d\n"                             \
-             "\t%s\n\tExpecting: %s\n",                         \
-             __FILE__, __LINE__, __PRETTY_FUNCTION__, # cond);  \
-      asm("trap;");                                             \
-    }                                                           \
-  } while (0);                                                  \
+#define KERNEL_CHECK(cond)                                                     \
+  do {                                                                         \
+    if (!(cond)) {                                                             \
+      printf("\nKernel error:\n"                                               \
+             "In: %s, \tline: %d\n"                                            \
+             "\t%s\n\tExpecting: %s\n",                                        \
+             __FILE__, __LINE__, __PRETTY_FUNCTION__, #cond);                  \
+      asm("trap;");                                                            \
+    }                                                                          \
+  } while (0);
 
 #ifdef __CUDA_ARCH__
 #define SPAN_CHECK KERNEL_CHECK
@@ -140,10 +140,13 @@ class SpanIterator {
     SPAN_CHECK(index_ < span_->size());
     return *(span_->data() + index_);
   }
+  XGBOOST_DEVICE reference operator[](difference_type n) const {
+    return *(*this + n);
+  }
 
   XGBOOST_DEVICE pointer operator->() const {
     SPAN_CHECK(index_ != span_->size());
-    return  span_->data() + index_;
+    return span_->data() + index_;
   }
 
   XGBOOST_DEVICE SpanIterator& operator++() {
@@ -490,7 +493,7 @@ class Span {
     return data()[_idx];
   }
 
-  XGBOOST_DEVICE constexpr reference operator()(index_type _idx) const {
+  XGBOOST_DEVICE reference operator()(index_type _idx) const {
     return this->operator[](_idx);
   }
 
@@ -622,8 +625,8 @@ XGBOOST_DEVICE auto as_writable_bytes(Span<T, E> s) __span_noexcept ->  // NOLIN
   return {reinterpret_cast<byte*>(s.data()), s.size_bytes()};
 }
 
-}  // namespace common NOLINT
-}  // namespace xgboost NOLINT
+}  // namespace common
+}  // namespace xgboost
 
 #if defined(_MSC_VER) &&_MSC_VER < 1910
 #undef constexpr
