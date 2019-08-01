@@ -176,7 +176,7 @@ class GBLinear : public GradientBooster {
 
   std::vector<std::string> DumpModel(const FeatureMap& fmap,
                                      bool with_stats,
-                                     std::string format) override {
+                                     std::string format) {
     model_.LazyInitModel();
     return model_.DumpModel(fmap, with_stats, format);
   }

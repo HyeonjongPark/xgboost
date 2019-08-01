@@ -118,6 +118,7 @@ struct GBTreeModel {
     }
     return dump;
   }
+
   void CommitModel(std::vector<std::unique_ptr<RegTree> >&& new_trees,
                    int bst_group) {
     for (auto & new_tree : new_trees) {

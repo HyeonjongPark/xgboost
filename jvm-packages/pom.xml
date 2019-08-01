@@ -6,7 +6,7 @@
 
     <groupId>ai.h2o</groupId>
     <artifactId>xgboost-jvm</artifactId>
-    <version>0.90</version>
+    <version>0.90-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>XGBoost JVM Package</name>
     <properties>
