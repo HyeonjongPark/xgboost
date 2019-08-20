@@ -151,7 +151,7 @@ write_version:
 	cd jvm-packages/xgboost4j && mvn -q $(MVN_OPTS) -DnewVersion=$(XGB_VERSION) versions:set
 
 apply_patches:
-	patch -R -p1 < patch/000_rabit_shutdown.patch
+	patch -p1 < patch/000_rabit_shutdown.patch
 
 build_impl:
 	mkdir -p build ci-build
