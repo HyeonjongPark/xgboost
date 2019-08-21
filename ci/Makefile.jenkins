@@ -102,7 +102,7 @@ ifneq (,$(findstring CentOS,$(shell cat /etc/os-release 2> /dev/null)))
     endif
 endif
 # Check if cmake is of expected version
-ifneq ($(shell cmake --version | head -1), cmake version 3.5.2)
+ifneq ($(shell cmake --version | head -1), cmake version 3.12.3)
     $(error Unexpected cmake version.)
 endif
 endif
